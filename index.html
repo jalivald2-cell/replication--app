@@ -96,6 +96,15 @@
   let speed = 10;
   let running = false;
 
+  // יצירת Web Worker
+  let methylationWorker = new Worker('methylationWorker.js');
+  let methylationStatus = {};
+
+  methylationWorker.onmessage = function(e) {
+    const { position, methylated } = e.data;
+    methylationStatus[position] = methylated;
+  };
+
   function baseAt(pos) {
     return bases[pos % bases.length];
   }
@@ -113,7 +122,6 @@
   function drawDNA(pos, zoom) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.font = '14px monospace';
-    ctx.fillStyle = '#0fa';
 
     const centerY = canvas.height / 2;
     const baseSpacing = 10;
@@ -127,32 +135,45 @@
       const y1 = centerY - 20 * Math.sin(i * 0.3);
       const y2 = centerY + 20 * Math.sin(i * 0.3);
 
+      ctx.fillStyle = '#0fa';
       ctx.fillText(base, x, y1);
       ctx.fillText(complement(base), x, y2);
 
+      // קו שמחבר בין הבסיסים
       ctx.strokeStyle = '#0fa';
       ctx.beginPath();
       ctx.moveTo(x, y1 + 5);
       ctx.lineTo(x, y2 - 5);
       ctx.stroke();
+
+      // סימון מתילציה אם יש (למשל כעיגול צהוב ליד הבסיס)
+      if(methylationStatus[idx]) {
+        ctx.fillStyle = 'yellow';
+        ctx.beginPath();
+        ctx.arc(x, y1 - 10, 5, 0, 2 * Math.PI);
+        ctx.fill();
+      }
     }
   }
 
   function updateInfo() {
+    const methyl = methylationStatus[position] ? 'כן' : 'לא';
     document.getElementById('infoBox').innerHTML = 
       `מיקום: ${position} / ${genomeLength}<br>` +
       `בסיס נוכחי: ${baseAt(position)}<br>` +
-      `מתילציה: ---`;
+      `מתילציה: ${methyl}`;
   }
 
   function stepNext() {
     if(position < genomeLength - 1) position++;
+    methylationWorker.postMessage({ position });
     drawDNA(position, zoom);
     updateInfo();
   }
 
   function stepPrev() {
     if(position > 0) position--;
+    methylationWorker.postMessage({ position });
     drawDNA(position, zoom);
     updateInfo();
   }
@@ -176,6 +197,7 @@
   function reset() {
     stop();
     position = 0;
+    methylationWorker.postMessage({ position });
     drawDNA(position, zoom);
     updateInfo();
   }
@@ -203,6 +225,7 @@
     const val = parseInt(document.getElementById('posInput').value);
     if(val >= 0 && val < genomeLength) {
       position = val;
+      methylationWorker.postMessage({ position });
       drawDNA(position, zoom);
       updateInfo();
     }
