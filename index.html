@@ -4,13 +4,58 @@
 <meta charset="UTF-8" />
 <title>הדמיית DNA עם Web Worker</title>
 <style>
-  /* העיצוב שלך כאן, דומה למה ששלחת */
+  body {
+    background: #111;
+    color: #eee;
+    font-family: Arial, sans-serif;
+    margin: 0; padding: 0;
+    direction: rtl;
+    user-select: none;
+  }
+  #container {
+    width: 100vw; height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    padding: 15px;
+    box-sizing: border-box;
+  }
+  #controls {
+    margin-bottom: 10px;
+  }
+  label, input, button {
+    font-size: 16px;
+    margin: 5px;
+  }
+  #canvasContainer {
+    position: relative;
+    background: #222;
+    border: 2px solid #0fa;
+    border-radius: 8px;
+    width: 90vw;
+    height: 500px;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    background: #222;
+    margin: auto;
+  }
+  #infoBox {
+    margin-top: 10px;
+    width: 90vw;
+    font-size: 18px;
+    background: #000a;
+    padding: 8px;
+    border-radius: 5px;
+  }
+  input[type=range] {
+    vertical-align: middle;
+  }
 </style>
 </head>
 <body>
 
 <div id="container">
-  <!-- כאן הכפתורים והקלטים -->
   <div id="controls">
     <button id="btnPrev">⬅ קודם</button>
     <button id="btnNext">הבא ➡</button>
@@ -40,154 +85,131 @@
   </div>
 </div>
 
-<script src="methylationWorker.js"></script> <!-- אם יש לך Worker -->
-
 <script>
-  // JavaScript מלא כאן - ראה שלב 2
+  const canvas = document.getElementById('dnaCanvas');
+  const ctx = canvas.getContext('2d');
+
+  const bases = ['A', 'T', 'C', 'G'];
+  const genomeLength = 1000;  // קטן לדוגמה
+  let position = 0;
+  let zoom = 100;
+  let speed = 10;
+  let running = false;
+
+  function baseAt(pos) {
+    return bases[pos % bases.length];
+  }
+
+  function complement(base) {
+    switch(base) {
+      case 'A': return 'T';
+      case 'T': return 'A';
+      case 'C': return 'G';
+      case 'G': return 'C';
+      default: return '?';
+    }
+  }
+
+  function drawDNA(pos, zoom) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = '14px monospace';
+    ctx.fillStyle = '#0fa';
+
+    const centerY = canvas.height / 2;
+    const baseSpacing = 10;
+
+    for(let i = 0; i < zoom; i++) {
+      const idx = pos + i;
+      if(idx >= genomeLength) break;
+      const base = baseAt(idx);
+
+      const x = 50 + i * baseSpacing;
+      const y1 = centerY - 20 * Math.sin(i * 0.3);
+      const y2 = centerY + 20 * Math.sin(i * 0.3);
+
+      ctx.fillText(base, x, y1);
+      ctx.fillText(complement(base), x, y2);
+
+      ctx.strokeStyle = '#0fa';
+      ctx.beginPath();
+      ctx.moveTo(x, y1 + 5);
+      ctx.lineTo(x, y2 - 5);
+      ctx.stroke();
+    }
+  }
+
+  function updateInfo() {
+    document.getElementById('infoBox').innerHTML = 
+      `מיקום: ${position} / ${genomeLength}<br>` +
+      `בסיס נוכחי: ${baseAt(position)}<br>` +
+      `מתילציה: ---`;
+  }
+
+  function stepNext() {
+    if(position < genomeLength - 1) position++;
+    drawDNA(position, zoom);
+    updateInfo();
+  }
+
+  function stepPrev() {
+    if(position > 0) position--;
+    drawDNA(position, zoom);
+    updateInfo();
+  }
+
+  let intervalId;
+
+  function start() {
+    if(running) return;
+    running = true;
+    intervalId = setInterval(() => {
+      stepNext();
+      if(position >= genomeLength - zoom) stop();
+    }, 1000 / speed);
+  }
+
+  function stop() {
+    running = false;
+    clearInterval(intervalId);
+  }
+
+  function reset() {
+    stop();
+    position = 0;
+    drawDNA(position, zoom);
+    updateInfo();
+  }
+
+  document.getElementById('btnNext').addEventListener('click', stepNext);
+  document.getElementById('btnPrev').addEventListener('click', stepPrev);
+  document.getElementById('btnStart').addEventListener('click', start);
+  document.getElementById('btnPause').addEventListener('click', stop);
+  document.getElementById('btnReset').addEventListener('click', reset);
+
+  document.getElementById('speedRange').addEventListener('input', e => {
+    speed = e.target.value;
+    if(running) {
+      stop();
+      start();
+    }
+  });
+
+  document.getElementById('zoomRange').addEventListener('input', e => {
+    zoom = parseInt(e.target.value);
+    drawDNA(position, zoom);
+  });
+
+  document.getElementById('btnJump').addEventListener('click', () => {
+    const val = parseInt(document.getElementById('posInput').value);
+    if(val >= 0 && val < genomeLength) {
+      position = val;
+      drawDNA(position, zoom);
+      updateInfo();
+    }
+  });
+
+  reset();
 </script>
 
 </body>
 </html>
-שלב 2 — JavaScript לדוגמה פשוטה עם הדמיית סליל בסיסית
-js
-Copy
-Edit
-const canvas = document.getElementById('dnaCanvas');
-const ctx = canvas.getContext('2d');
-
-const bases = ['A', 'T', 'C', 'G'];
-const genomeLength = 1000;  // כאן קטן לנוחות הדגמה
-let position = 0;
-let zoom = 100;
-let speed = 10;
-let running = false;
-
-function baseAt(pos) {
-  // פונקציה דמה שמחזירה בסיס לפי מיקום (למשל סינוס למגוון)
-  return bases[pos % bases.length];
-}
-
-function drawDNA(pos, zoom) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.font = '14px monospace';
-  ctx.fillStyle = '#0fa';
-
-  const centerY = canvas.height / 2;
-  const baseSpacing = 10;
-
-  for(let i = 0; i < zoom; i++) {
-    const idx = pos + i;
-    if(idx >= genomeLength) break;
-    const base = baseAt(idx);
-
-    // ציור בסיס בשני הסלילים במקומות ייחודיים
-    const x = 50 + i * baseSpacing;
-    const y1 = centerY - 20 * Math.sin(i * 0.3);
-    const y2 = centerY + 20 * Math.sin(i * 0.3);
-
-    ctx.fillText(base, x, y1);
-    ctx.fillText(complement(base), x, y2);
-
-    // קו שמחבר בין הבסיסים לסלילים (קשרי בסיסים)
-    ctx.strokeStyle = '#0fa';
-    ctx.beginPath();
-    ctx.moveTo(x, y1 + 5);
-    ctx.lineTo(x, y2 - 5);
-    ctx.stroke();
-  }
-}
-
-function complement(base) {
-  switch(base) {
-    case 'A': return 'T';
-    case 'T': return 'A';
-    case 'C': return 'G';
-    case 'G': return 'C';
-    default: return '?';
-  }
-}
-
-function updateInfo() {
-  document.getElementById('infoBox').innerHTML = 
-    `מיקום: ${position} / ${genomeLength}<br>` +
-    `בסיס נוכחי: ${baseAt(position)}<br>` +
-    `מתילציה: ---`;
-}
-
-function stepNext() {
-  if(position < genomeLength - 1) position++;
-  drawDNA(position, zoom);
-  updateInfo();
-}
-
-function stepPrev() {
-  if(position > 0) position--;
-  drawDNA(position, zoom);
-  updateInfo();
-}
-
-let intervalId;
-
-function start() {
-  if(running) return;
-  running = true;
-  intervalId = setInterval(() => {
-    stepNext();
-    if(position >= genomeLength - zoom) stop();
-  }, 1000 / speed);
-}
-
-function stop() {
-  running = false;
-  clearInterval(intervalId);
-}
-
-function reset() {
-  stop();
-  position = 0;
-  drawDNA(position, zoom);
-  updateInfo();
-}
-
-// מאזיני אירועים לכפתורים והזזת סרגלים
-document.getElementById('btnNext').addEventListener('click', stepNext);
-document.getElementById('btnPrev').addEventListener('click', stepPrev);
-document.getElementById('btnStart').addEventListener('click', start);
-document.getElementById('btnPause').addEventListener('click', stop);
-document.getElementById('btnReset').addEventListener('click', reset);
-
-document.getElementById('speedRange').addEventListener('input', e => {
-  speed = e.target.value;
-  if(running) {
-    stop();
-    start();
-  }
-});
-document.getElementById('zoomRange').addEventListener('input', e => {
-  zoom = parseInt(e.target.value);
-  drawDNA(position, zoom);
-});
-document.getElementById('btnJump').addEventListener('click', () => {
-  const val = parseInt(document.getElementById('posInput').value);
-  if(val >= 0 && val < genomeLength) {
-    position = val;
-    drawDNA(position, zoom);
-    updateInfo();
-  }
-});
-
-// אתחול ראשוני
-reset();
-שלב 3 — קובץ Web Worker (ממתילציה)
-אפשר להוסיף את הקובץ methylationWorker.js כדוגמה פשוטה שמחזירה רק תגובות דמה (ניתן להרחיב לפי הצורך):
-
-js
-Copy
-Edit
-// methylationWorker.js
-self.onmessage = function(e) {
-  const pos = e.data.position;
-  // חישוב דמה: אם הבסיס הוא C, יש מתילציה (true), אחרת false
-  const methylated = (pos % 4 === 0); // לדוגמה, כל 4 בסיסים
-  self.postMessage({ position: pos, methylated });
-};
